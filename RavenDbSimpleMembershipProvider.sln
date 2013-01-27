@@ -1,0 +1,49 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RavenDbSimpleMembershipProvider", "RavenDbSimpleMembershipProvider\RavenDbSimpleMembershipProvider.csproj", "{C3ADFB2D-FC0B-4F16-96F2-927FC8BAB27D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{2E74ED58-C528-4412-BB30-253A256D34FC}"
+	ProjectSection(SolutionItems) = preProject
+		.nuget\NuGet.Config = .nuget\NuGet.Config
+		.nuget\NuGet.exe = .nuget\NuGet.exe
+		.nuget\NuGet.targets = .nuget\NuGet.targets
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RavenDbSimpleMembershipProvider.Tests", "RavenDbSimpleMembershipProvider.Tests\RavenDbSimpleMembershipProvider.Tests.csproj", "{559E3205-5DF3-4ABD-86C8-223EC69C6FA8}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|Mixed Platforms = Debug|Mixed Platforms
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|Mixed Platforms = Release|Mixed Platforms
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C3ADFB2D-FC0B-4F16-96F2-927FC8BAB27D}.Debug|Any CPU.ActiveCfg = Debug|x86
+		{C3ADFB2D-FC0B-4F16-96F2-927FC8BAB27D}.Debug|Mixed Platforms.ActiveCfg = Debug|x86
+		{C3ADFB2D-FC0B-4F16-96F2-927FC8BAB27D}.Debug|Mixed Platforms.Build.0 = Debug|x86
+		{C3ADFB2D-FC0B-4F16-96F2-927FC8BAB27D}.Debug|x86.ActiveCfg = Debug|x86
+		{C3ADFB2D-FC0B-4F16-96F2-927FC8BAB27D}.Debug|x86.Build.0 = Debug|x86
+		{C3ADFB2D-FC0B-4F16-96F2-927FC8BAB27D}.Release|Any CPU.ActiveCfg = Release|x86
+		{C3ADFB2D-FC0B-4F16-96F2-927FC8BAB27D}.Release|Mixed Platforms.ActiveCfg = Release|x86
+		{C3ADFB2D-FC0B-4F16-96F2-927FC8BAB27D}.Release|Mixed Platforms.Build.0 = Release|x86
+		{C3ADFB2D-FC0B-4F16-96F2-927FC8BAB27D}.Release|x86.ActiveCfg = Release|x86
+		{C3ADFB2D-FC0B-4F16-96F2-927FC8BAB27D}.Release|x86.Build.0 = Release|x86
+		{559E3205-5DF3-4ABD-86C8-223EC69C6FA8}.Debug|Any CPU.ActiveCfg = Debug|x86
+		{559E3205-5DF3-4ABD-86C8-223EC69C6FA8}.Debug|Mixed Platforms.ActiveCfg = Debug|x86
+		{559E3205-5DF3-4ABD-86C8-223EC69C6FA8}.Debug|Mixed Platforms.Build.0 = Debug|x86
+		{559E3205-5DF3-4ABD-86C8-223EC69C6FA8}.Debug|x86.ActiveCfg = Debug|x86
+		{559E3205-5DF3-4ABD-86C8-223EC69C6FA8}.Debug|x86.Build.0 = Debug|x86
+		{559E3205-5DF3-4ABD-86C8-223EC69C6FA8}.Release|Any CPU.ActiveCfg = Release|x86
+		{559E3205-5DF3-4ABD-86C8-223EC69C6FA8}.Release|Mixed Platforms.ActiveCfg = Release|x86
+		{559E3205-5DF3-4ABD-86C8-223EC69C6FA8}.Release|Mixed Platforms.Build.0 = Release|x86
+		{559E3205-5DF3-4ABD-86C8-223EC69C6FA8}.Release|x86.ActiveCfg = Release|x86
+		{559E3205-5DF3-4ABD-86C8-223EC69C6FA8}.Release|x86.Build.0 = Release|x86
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
