@@ -49,3 +49,11 @@ At some point in the launch of your application, set the DocumentStore property:
     RavenDbSimpleMembershipProvider.RavenDbSimpleRoleProvider.DocumentStore = DocumentStoreHolder.Store;
 
 From there, you should be laughing.
+
+## Known issues ##
+* Doesn't support multiple applications in the same database
+* Doesn't support the "connectionStringName" attribute
+* Doesn't support ravendb in embedded mode (ie, you currently have to pass in the document store)
+* Doesn't support unit of work pattern (should it?)
+* Uses WaitForNonStaleResultsAsOfNow everywhere to fit in with the interface (which assumes its a immediately consistent data store). Not really convinced is a good idea.
+* no tests around the initialize() methods
