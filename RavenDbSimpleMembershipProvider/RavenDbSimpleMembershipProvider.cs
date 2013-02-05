@@ -235,7 +235,9 @@ namespace RavenDbSimpleMembershipProvider
                 const bool throwException = true;
                 var userId = GetUserIdIfUserNameHasConfirmedAccount(userName, throwException);
 
-                var membership = session.Query<WebpagesMembership>().FirstOrDefault(x => x.UserId == userId);
+                var membership = session.Query<WebpagesMembership>()
+                    .Customize(x => x.WaitForNonStaleResultsAsOfNow())
+                    .FirstOrDefault(x => x.UserId == userId);
                 if (membership != null)
                 {
                     if (membership.PasswordVerificationTokenExpirationDate != null && membership.PasswordVerificationTokenExpirationDate.Value > DateTime.UtcNow)
@@ -350,7 +352,9 @@ namespace RavenDbSimpleMembershipProvider
                 if (user == null)
                     throw new InvalidOperationException(string.Format("User {0} does not exist!", userName));
 
-                var membership = session.Query<WebpagesMembership>().FirstOrDefault(x => x.UserId == user.Id);
+                var membership = session.Query<WebpagesMembership>()
+                    .Customize(x => x.WaitForNonStaleResultsAsOfNow())
+                    .FirstOrDefault(x => x.UserId == user.Id);
                 if (membership != null)
                     return membership.PasswordFailuresSinceLastSuccess;
                 return -1;
@@ -432,7 +436,6 @@ namespace RavenDbSimpleMembershipProvider
                 session.SaveChanges();
                 return result;
             }
-
         }
 
         public override bool DeleteUser(string username, bool deleteAllRelatedData)
@@ -655,7 +658,9 @@ namespace RavenDbSimpleMembershipProvider
         {
             using (var session = DocumentStore.OpenSession())
             {
-                var user = session.Query<UserProfile>().FirstOrDefault(x => x.UserName == userName);
+                var user = session.Query<UserProfile>()
+                    .Customize(x => x.WaitForNonStaleResultsAsOfNow())
+                    .FirstOrDefault(x => x.UserName == userName);
                 if (user != null)
                     throw new MembershipCreateUserException(MembershipCreateStatus.DuplicateUserName);
 
@@ -826,7 +831,6 @@ namespace RavenDbSimpleMembershipProvider
                         throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, "User {0} does not exist!", new object[] { username }));
                     return null;
                 }
-                Console.WriteLine("looking for membership object with userid " + user.Id);
 
                 var membership = session.Query<WebpagesMembership>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())

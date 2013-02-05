@@ -75,17 +75,36 @@ namespace RavenDbSimpleMembershipProvider
 
         public override void AddUsersToRoles(string[] userNames, string[] roleNames)
         {
+            if (userNames == null) throw new ArgumentNullException("userNames");
+            if (roleNames == null) throw new ArgumentNullException("roleNames");
+
             if (userNames.Length == 0 || roleNames.Length == 0) return;
+
+            if (userNames.Any(x => x == null)) throw new ArgumentException("User name cannot be null.", "userNames");
+            if (userNames.Any(x => x == string.Empty)) throw new ArgumentException("User name cannot be empty.", "userNames");
+
+            if (roleNames.Any(x => x == null)) throw new ArgumentException("Role name cannot be null.", "roleNames");
+            if (roleNames.Any(x => x == string.Empty)) throw new ArgumentException("Role name cannot be empty.", "roleNames");
 
             using (var session = documentStore.OpenSession())
             {
-                var users = session.Query<UserProfile>().Where(x => x.UserName.In(userNames));
-                var roles = session.Query<WebpagesRole>().Where(x => x.RoleName.In(roleNames));
+                var roles = session.Query<WebpagesRole>()
+                    .Customize(x => x.WaitForNonStaleResultsAsOfNow())
+                    .Where(x => x.RoleName.In(roleNames));
+                var rolesThatDontExist = roleNames.Except(roles.Select(x => x.RoleName));
+                if (rolesThatDontExist.Any()) throw new ProviderException("Role " + rolesThatDontExist.First() + " doesn't exist.");
+                
+                var users = session.Query<UserProfile>()
+                    .Customize(x => x.WaitForNonStaleResultsAsOfNow())
+                    .Where(x => x.UserName.In(userNames));
+                var usersThatDontExist = userNames.Except(users.Select(x => x.UserName));
+                if (usersThatDontExist.Any()) throw new ProviderException("User " + usersThatDontExist.First() + " doesn't exist.");
+
                 foreach (var user in users)
                 {
                     foreach (var role in roles)
                     {
-                        if (!user.Roles.Contains(role.Id))
+                        if (user.Roles.Contains(role.Id)) throw new ProviderException(string.Format("User {0} is already in role {1}.", user.UserName, role.RoleName));
                             user.Roles.Add(role.Id);
                     }
                 }
@@ -95,6 +114,10 @@ namespace RavenDbSimpleMembershipProvider
 
         public override void CreateRole(string roleName)
         {
+            if (roleName == null) throw new ArgumentNullException("roleName");
+            if (roleName == string.Empty) throw new ArgumentException("Role name cannot be empty.", "roleName");
+            if (roleName.Contains(",")) throw new ArgumentException("Role name cannot contain a comma.", "roleName");
+
             using (var session = documentStore.OpenSession())
             {
                 var roles = session.Query<WebpagesRole>()
@@ -112,10 +135,16 @@ namespace RavenDbSimpleMembershipProvider
 
         public override bool DeleteRole(string roleName, bool throwOnPopulatedRole)
         {
+            if (roleName == null) throw new ArgumentNullException("roleName");
+            if (roleName == string.Empty) throw new ArgumentException("Role name cannot be empty.", "roleName");
+
             using (var session = documentStore.OpenSession())
             {
-                var role = session.Query<WebpagesRole>().FirstOrDefault(x => x.RoleName == roleName);
-                if (role == null) throw new ProviderException(string.Format("Role {0} does not exist!", roleName));
+                var role = session.Query<WebpagesRole>()
+                    .Customize(x => x.WaitForNonStaleResultsAsOfNow())
+                    .FirstOrDefault(x => x.RoleName == roleName);
+                if (role == null) throw new ProviderException(string.Format("Role {0} does not exist.", roleName));
+
                 var usersInRole = session.Query<UserProfile>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
                     .Where(x => x.Roles.Any(roleId => roleId == role.Id));
@@ -123,8 +152,9 @@ namespace RavenDbSimpleMembershipProvider
                 if (usersInRole.Any())
                 {
                     if (throwOnPopulatedRole)
-                        throw new ProviderException(string.Format("Role {0} is not empty!", roleName));
-                    return false;
+                        throw new ProviderException(string.Format("Role {0} contains users. As throwOnPopulatedRole is true, refusing to delete.", roleName));
+                    foreach (var user in usersInRole)
+                        user.Roles.Remove(roleName);
                 }
                 session.Delete(role);
                 session.SaveChanges();
@@ -142,7 +172,7 @@ namespace RavenDbSimpleMembershipProvider
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
                     .FirstOrDefault(x => x.RoleName == roleName);
                 if (role == null) 
-                    throw new ProviderException(string.Format("Role {0} does not exist!", roleName));
+                    throw new ProviderException(string.Format("Role {0} does not exist.", roleName));
 
                 documentStore.WaitForNonStaleIndexes();
 
@@ -169,13 +199,16 @@ namespace RavenDbSimpleMembershipProvider
 
         public override string[] GetRolesForUser(string userName)
         {
+            if (userName == null) throw new ArgumentNullException("userName");
+            if (userName == string.Empty) throw new ArgumentException("User name cannot be empty.", "userName");
+
             using (var session = documentStore.OpenSession())
             {
                 var user = session.Query<UserProfile>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
                     .FirstOrDefault(x => x.UserName == userName);
                 if (user == null) 
-                    throw new ProviderException(string.Format("User {0} does not exist!", userName));
+                    throw new ProviderException(string.Format("User {0} does not exist.", userName));
 
                 var roles = session.Query<WebpagesRole>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
@@ -187,13 +220,15 @@ namespace RavenDbSimpleMembershipProvider
 
         public override string[] GetUsersInRole(string roleName)
         {
+            if (roleName == null) throw new ArgumentNullException("roleName");
+            if (roleName == string.Empty) throw new ArgumentException("Role name cannot be empty.", "roleName");
+
             using (var session = documentStore.OpenSession())
             {
                 var role = session.Query<WebpagesRole>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
                     .FirstOrDefault(x => x.RoleName == roleName);
-                if (role == null) 
-                    throw new ProviderException(string.Format("Role {0} does not exist!", roleName));
+                if (role == null) throw new ProviderException(string.Format("Role {0} does not exist.", roleName));
                 
                 var users = session.Query<UserProfile>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
@@ -206,19 +241,25 @@ namespace RavenDbSimpleMembershipProvider
 
         public override bool IsUserInRole(string userName, string roleName)
         {
+            if (userName == null) throw new ArgumentNullException("userName");
+            if (userName == string.Empty) throw new ArgumentException("User name cannot be empty.", "userName");
+
+            if (roleName == null) throw new ArgumentNullException("roleName");
+            if (roleName == string.Empty) throw new ArgumentException("Role name cannot be empty.", "roleName");
+
             using (var session = documentStore.OpenSession())
             {
                 var user = session.Query<UserProfile>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
                     .FirstOrDefault(x => x.UserName == userName);
                 if (user == null) 
-                    throw new ProviderException(string.Format("User {0} does not exist!", userName));
+                    throw new ProviderException(string.Format("User {0} does not exist.", userName));
                 
                 var role = session.Query<WebpagesRole>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
                     .FirstOrDefault(x => x.RoleName == roleName);
                 if (role == null) 
-                    throw new ProviderException(string.Format("Role {0} does not exist!", roleName));
+                    throw new ProviderException(string.Format("Role {0} does not exist.", roleName));
 
                 return user.Roles.Contains(role.Id);
             }
@@ -226,7 +267,16 @@ namespace RavenDbSimpleMembershipProvider
 
         public override void RemoveUsersFromRoles(string[] userNames, string[] roleNames)
         {
+            if (userNames == null) throw new ArgumentNullException("userNames");
+            if (roleNames == null) throw new ArgumentNullException("roleNames");
             if (userNames.Length == 0 || roleNames.Length == 0) return;
+
+            if (userNames.Any(x => x == null)) throw new ArgumentException("User name cannot be null.", "userNames");
+            if (userNames.Any(x => x == string.Empty)) throw new ArgumentException("User name cannot be empty.", "userNames");
+
+            if (roleNames.Any(x => x == null)) throw new ArgumentException("Role name cannot be null.", "roleNames");
+            if (roleNames.Any(x => x == string.Empty)) throw new ArgumentException("Role name cannot be empty.", "roleNames");
+
 
             using (var session = documentStore.OpenSession())
             {
@@ -235,20 +285,26 @@ namespace RavenDbSimpleMembershipProvider
                     .Where(x => x.UserName.In(userNames))
                     .ToList();
 
-                if (!users.Any()) 
-                    return;
+                var usersThatDontExist = userNames.Except(users.Select(x => x.UserName));
+                if (usersThatDontExist.Any()) throw new ProviderException("User " + usersThatDontExist.First() + " does not exist.");
 
                 var roles = session.Query<WebpagesRole>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
                     .Where(x => x.RoleName.In(roleNames))
                     .ToList();
 
-                if (!roles.Any()) return;
+                var rolesThatDontExist = roleNames.Except(roles.Select(x => x.RoleName));
+                if (rolesThatDontExist.Any()) throw new ProviderException("Role " + rolesThatDontExist.First() + " does not exist.");
 
                 foreach (var user in users)
                 {
                     foreach (var role in roles)
+                    {
+                        if (!user.Roles.Contains(role.Id)) 
+                            throw new ProviderException(string.Format("User {0} is not currently in role {1}.", user.UserName, role.RoleName));
+
                         user.Roles.Remove(role.Id);
+                    }
                 }
                 session.SaveChanges();
             }
@@ -256,6 +312,9 @@ namespace RavenDbSimpleMembershipProvider
 
         public override bool RoleExists(string roleName)
         {
+            if (roleName == null) throw new ArgumentNullException("roleName");
+            if (roleName == string.Empty) throw new ArgumentException("Value cannot be empty.", "roleName");
+
             using (var session = documentStore.OpenSession())
             {
                 var role = session.Query<WebpagesRole>()
