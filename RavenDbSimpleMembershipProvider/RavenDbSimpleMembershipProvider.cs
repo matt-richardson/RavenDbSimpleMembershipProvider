@@ -227,34 +227,37 @@ namespace RavenDbSimpleMembershipProvider
 
         public override string GeneratePasswordResetToken(string userName, int tokenExpirationInMinutesFromNow)
         {
+            if (userName == null)
+                throw new ArgumentNullException("userName");
             if (string.IsNullOrEmpty(userName))
-                throw new ArgumentException("Username cannot be empty", "UserName");
+                throw new ArgumentException("Username cannot be empty.", "userName");
+
+            const bool throwException = true;
+            var userId = GetUserIdIfUserNameHasConfirmedAccount(userName, throwException);
 
             using (var session = DocumentStore.OpenSession())
             {
-                const bool throwException = true;
-                var userId = GetUserIdIfUserNameHasConfirmedAccount(userName, throwException);
-
                 var membership = session.Query<WebpagesMembership>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
                     .FirstOrDefault(x => x.UserId == userId);
-                if (membership != null)
-                {
-                    if (membership.PasswordVerificationTokenExpirationDate != null && membership.PasswordVerificationTokenExpirationDate.Value > DateTime.UtcNow)
-                    {
-                        return membership.PasswordVerificationToken;
-                    }
-                    var token = GenerateToken();
-                    membership.PasswordVerificationToken = token;
-                    membership.PasswordVerificationTokenExpirationDate = DateTime.UtcNow.AddMinutes(tokenExpirationInMinutesFromNow);
 
-                    session.Store(membership);
-                    session.SaveChanges();
+                if (PasswordVerificationTokenExpirationDateIsInTheFuture(membership))
+                    return membership.PasswordVerificationToken;
 
-                    return token;
-                }
+                var token = GenerateToken();
+                membership.PasswordVerificationToken = token;
+                membership.PasswordVerificationTokenExpirationDate = DateTime.UtcNow.AddMinutes(tokenExpirationInMinutesFromNow);
+
+                session.Store(membership);
+                session.SaveChanges();
+
+                return token;
             }
-            return string.Empty;
+        }
+
+        private static bool PasswordVerificationTokenExpirationDateIsInTheFuture(WebpagesMembership membership)
+        {
+            return membership.PasswordVerificationTokenExpirationDate != null && membership.PasswordVerificationTokenExpirationDate.Value > DateTime.UtcNow;
         }
 
         public override ICollection<OAuthAccountData> GetAccountsForUser(string userName)
@@ -286,16 +289,15 @@ namespace RavenDbSimpleMembershipProvider
                 var user = session.Query<UserProfile>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
                     .FirstOrDefault(x => x.UserName == userName);
-                if (user != null)
-                {
-                    var membership = session.Query<WebpagesMembership>()
-                        .Customize(x => x.WaitForNonStaleResultsAsOfNow())
-                        .FirstOrDefault(x => x.UserId == user.Id);
-                    if (membership != null && membership.CreateDate != null)
-                    {
-                        return membership.CreateDate.Value;
-                    }
-                }
+                if (user == null)
+                    throw new InvalidOperationException(string.Format("User {0} does not exist.", userName));
+                
+                var membership = session.Query<WebpagesMembership>()
+                    .Customize(x => x.WaitForNonStaleResultsAsOfNow())
+                    .FirstOrDefault(x => x.UserId == user.Id);
+                if (membership != null && membership.CreateDate != null)
+                    return membership.CreateDate.Value;
+                
                 return DateTime.MinValue;
             }
         }
@@ -309,7 +311,7 @@ namespace RavenDbSimpleMembershipProvider
                     .FirstOrDefault(x => x.UserName == userName);
 
                 if (user == null)
-                    return DateTime.MinValue;
+                    throw new InvalidOperationException(string.Format("User {0} does not exist.", userName));
                 
                 var membership = session.Query<WebpagesMembership>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
@@ -330,15 +332,15 @@ namespace RavenDbSimpleMembershipProvider
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
                     .FirstOrDefault(x => x.UserName == userName);
                 if (user == null)
-                    return DateTime.MinValue;
+                    throw new InvalidOperationException(string.Format("User {0} does not exist.", userName));
 
                 var membership = session.Query<WebpagesMembership>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
                     .FirstOrDefault(x => x.UserId == user.Id);
 
-                if (membership != null && membership.PasswordChangedDate != null)
-                    return membership.PasswordChangedDate.Value;
-                return DateTime.MinValue;
+                return membership != null 
+                    ? membership.PasswordChangedDate 
+                    : DateTime.MinValue;
             }
         }
 
@@ -350,7 +352,7 @@ namespace RavenDbSimpleMembershipProvider
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
                     .FirstOrDefault(x => x.UserName == userName);
                 if (user == null)
-                    throw new InvalidOperationException(string.Format("User {0} does not exist!", userName));
+                    throw new InvalidOperationException(string.Format("User {0} does not exist.", userName));
 
                 var membership = session.Query<WebpagesMembership>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
@@ -377,7 +379,7 @@ namespace RavenDbSimpleMembershipProvider
         public override bool IsConfirmed(string userName)
         {
             if (string.IsNullOrEmpty(userName))
-                throw new ArgumentException("Username cannot be empty", "UserName");
+                throw new ArgumentException("Username cannot be empty", "userName");
 
             const bool throwException = false;
             return (GetUserIdIfUserNameHasConfirmedAccount(userName, throwException) != null);
@@ -386,7 +388,7 @@ namespace RavenDbSimpleMembershipProvider
         public override bool ResetPasswordWithToken(string token, string newPassword)
         {
             if (string.IsNullOrEmpty(newPassword))
-                throw new ArgumentException("NewPassword cannot be empty", "newPassword");
+                throw new ArgumentException("New password cannot be empty.", "newPassword");
 
             using (var session = DocumentStore.OpenSession())
             {
@@ -394,18 +396,18 @@ namespace RavenDbSimpleMembershipProvider
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
                     .Where(x => x.PasswordVerificationToken == token && x.PasswordVerificationTokenExpirationDate > DateTime.UtcNow);
 
-                if (memberships.Count() == 1)
+                if (memberships.Any())
                 {
                     var membership = memberships.First();
-                    var passwordSet = SetPasswordInternal(session, membership.UserId, newPassword);
-                    if (passwordSet)
+                    var success = SetPasswordInternal(session, membership.UserId, newPassword);
+                    if (success)
                     {
                         membership.PasswordVerificationToken = null;
                         membership.PasswordVerificationTokenExpirationDate = null;
                         session.Store(membership);
                         session.SaveChanges();
                     }
-                    return passwordSet;
+                    return success;
                 }
             }
             return false;
@@ -414,11 +416,11 @@ namespace RavenDbSimpleMembershipProvider
         public override bool ChangePassword(string username, string oldPassword, string newPassword)
         {
             if (string.IsNullOrEmpty(username))
-                throw new ArgumentException("Username cannot be empty", "UserName");
+                throw new ArgumentException("User name cannot be empty.", "userName");
             if (string.IsNullOrEmpty(oldPassword))
-                throw new ArgumentException("OldPassword cannot be empty", "oldPassword");
+                throw new ArgumentException("Old password cannot be empty.", "oldPassword");
             if (string.IsNullOrEmpty(newPassword))
-                throw new ArgumentException("NewPassword cannot be empty", "newPassword");
+                throw new ArgumentException("New password cannot be empty.", "newPassword");
 
             UserProfile user;
             using (var session = DocumentStore.OpenSession())
@@ -448,10 +450,9 @@ namespace RavenDbSimpleMembershipProvider
                 if (user == null)
                     return false;
 
-                if (deleteAllRelatedData)
-                {
-                    //TODO: delete some stuff here
-                }
+                //if (deleteAllRelatedData) {
+                // REVIEW: what do we delete here?
+                //}
 
                 var oauthMemberships = session.Query<WebpagesOauthMembership>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
@@ -485,16 +486,28 @@ namespace RavenDbSimpleMembershipProvider
                 if (user == null)
                     return null;
 
-                return new MembershipUser(Membership.Provider.Name, username, user.IdAsInt(), null, null, null, true, false, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue, DateTime.MinValue);
+                const string email = null;
+                const string passwordQuestion = null;
+                const string comment = null;
+                const bool isApproved = true;
+                const bool isLockedOut = false;
+                var creationDate = DateTime.MinValue;
+                var lastLoginDate = DateTime.MinValue;
+                var lastActivityDate = DateTime.MinValue;
+                var lastPasswordChangedDate = DateTime.MinValue;
+                var lastLockoutDate = DateTime.MinValue;
+
+                return new MembershipUser(Membership.Provider.Name, username, user.IdAsInt(), email, passwordQuestion, comment, 
+                    isApproved, isLockedOut, creationDate, lastLoginDate, lastActivityDate, lastPasswordChangedDate, lastLockoutDate);
             }
         }
 
         public override bool ValidateUser(string username, string password)
         {
             if (string.IsNullOrEmpty(username))
-                throw new ArgumentException("Username cannot be empty", "UserName");
+                throw new ArgumentException("User name cannot be empty.", "userName");
             if (string.IsNullOrEmpty(password))
-                throw new ArgumentException("Password cannot be empty", "Password");
+                throw new ArgumentException("Password cannot be empty.", "password");
 
             const bool throwException = false;
             var userId = GetUserIdIfUserNameHasConfirmedAccount(username, throwException);
@@ -508,7 +521,7 @@ namespace RavenDbSimpleMembershipProvider
         public override void CreateOrUpdateOAuthAccount(string provider, string providerUserId, string userName)
         {
             if (string.IsNullOrEmpty(userName))
-                throw new ArgumentException("Username cannot be empty", "UserName");
+                throw new ArgumentException("Username cannot be empty.", "userName");
 
             using (var session = DocumentStore.OpenSession())
             {
@@ -517,11 +530,7 @@ namespace RavenDbSimpleMembershipProvider
                     .FirstOrDefault(x => x.UserName == userName);
 
                 if (user == null)
-                {
-                    user = new UserProfile { UserName = userName };
-                    session.Store(user);
-                    session.SaveChanges();
-                }
+                    throw new MembershipCreateUserException(MembershipCreateStatus.InvalidUserName);
 
                 var oAuth = session.Query<WebpagesOauthMembership>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
@@ -644,17 +653,17 @@ namespace RavenDbSimpleMembershipProvider
                     .FirstOrDefault(x => x.Token == requestToken);
 
                 if (tokenEntity == null)
-                    tokenEntity = new WebpagesOauthToken {Token = requestToken};
+                    tokenEntity = new WebpagesOauthToken { Token = requestToken };
                 else if (tokenEntity.Secret == requestTokenSecret) 
                     return;
-                
+        
                 tokenEntity.Secret = requestTokenSecret;
                 session.Store(tokenEntity);
                 session.SaveChanges();
             }
         }
 
-        private static void CreateUser(string userName, IEnumerable<KeyValuePair<string, object>> values)
+        internal void CreateUser(string userName, IEnumerable<KeyValuePair<string, object>> values)
         {
             using (var session = DocumentStore.OpenSession())
             {
@@ -666,24 +675,11 @@ namespace RavenDbSimpleMembershipProvider
 
                 user = new UserProfile { UserName = userName };
 
-                // TODO check vhat can be assigned here???? 
                 if (values != null)
                 {
-                    foreach (var v in values)
-                    {
-                        var value = v;
-                        if (value.Key.Equals("UserName", StringComparison.OrdinalIgnoreCase))
-                            continue;
-
-                        var type = user.GetType();
-                        var field = type.GetProperties()
-                                        .SingleOrDefault(f => f.Name.Equals(value.Key, StringComparison.OrdinalIgnoreCase));
-                        if (field != null)
-                        {
-                            var property = type.GetProperty(field.Name);
-                            property.SetValue(user, value.Value, null);
-                        }
-                    }
+                    //id is autogenerated by ravendb, username is supplied as paramter, roles are set using roleprovider
+                    //therefore no properties available to set using this method
+                    throw new NotImplementedException();
                 }
 
                 session.Store(user);
@@ -696,28 +692,35 @@ namespace RavenDbSimpleMembershipProvider
             if (string.IsNullOrEmpty(password))
                 throw new MembershipCreateUserException(MembershipCreateStatus.InvalidPassword);
 
-            string hashedPassword = Crypto.HashPassword(password);
-
-            if (hashedPassword.Length > 0x80)
-                throw new MembershipCreateUserException(MembershipCreateStatus.InvalidPassword);
-
             if (string.IsNullOrEmpty(userName))
                 throw new MembershipCreateUserException(MembershipCreateStatus.InvalidUserName);
 
+            var hashedPassword = Crypto.HashPassword(password);
+
             using (var session = DocumentStore.OpenSession())
             {
+                // Step 1: Check if the user exists in the Users table
                 var user = session.Query<UserProfile>()
                     .Customize(x => x.WaitForNonStaleResultsAsOfNow())
                     .FirstOrDefault(x => x.UserName == userName);
 
                 if (user == null)
-                    throw new MembershipCreateUserException(MembershipCreateStatus.InvalidUserName);
+                    throw new MembershipCreateUserException(MembershipCreateStatus.ProviderError);
 
+                // Step 2: Check if the user exists in the Membership table: Error if yes.
+                var membership = session.Query<WebpagesMembership>()
+                    .Customize(x => x.WaitForNonStaleResultsAsOfNow())
+                    .FirstOrDefault(x => x.UserId == user.Id);
+
+                if (membership != null)
+                    throw new MembershipCreateUserException(MembershipCreateStatus.DuplicateUserName);
+
+                // Step 3: Create user in Membership table
                 string token = null;
                 if (requireConfirmationToken)
                     token = GenerateToken();
 
-                var membership = new WebpagesMembership
+                membership = new WebpagesMembership
                 {
                     UserId = user.Id,
                     Password = hashedPassword,
@@ -739,8 +742,6 @@ namespace RavenDbSimpleMembershipProvider
         private static bool SetPasswordInternal(IDocumentSession session, string userId, string newPassword)
         {
             var hashedPassword = Crypto.HashPassword(newPassword);
-            if (hashedPassword.Length > 0x80)
-                throw new ArgumentException("Password is too long!");
 
             var membershipUser = session.Query<WebpagesMembership>()
                 .Customize(x => x.WaitForNonStaleResultsAsOfNow())
@@ -828,7 +829,7 @@ namespace RavenDbSimpleMembershipProvider
                 if (user == null)
                 {
                     if (throwException)
-                        throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, "User {0} does not exist!", new object[] { username }));
+                        throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, "User {0} does not exist.", new object[] { username }));
                     return null;
                 }
 
@@ -838,7 +839,7 @@ namespace RavenDbSimpleMembershipProvider
                 if (membership == null)
                 {
                     if (throwException)
-                        throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, "User {0} does not exist!", new object[] { username }));
+                        throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, "User {0} does not exist.", new object[] { username }));
                     return null;
                 }
                 return membership.UserId;
